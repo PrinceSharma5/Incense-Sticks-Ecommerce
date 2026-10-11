@@ -1,4 +1,3 @@
-import React from "react";
 import toast from "react-hot-toast";
 
 const ProductCard = ({ product,setData, setSkip, setHasMore, fetchData,setopenModal,setselectdProduct }) => {

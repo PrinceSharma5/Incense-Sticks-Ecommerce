@@ -1,50 +1,67 @@
-import React from "react";
 
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination } from "swiper/modules";
+import { useState } from "react";
 
 import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import toast, { Toaster } from "react-hot-toast";
 
-export default function HomeProductCard({ data = {} }) {
+export default function HomeProductCard({ data = {}, isLoading = false, hasError = false }) {
+  const navigate = useNavigate();
+  const [addingProductId, setAddingProductId] = useState("");
 
-
-  const add_to_cart=async(product_id)=>{
-
-    
-    const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/cart/add-to-cart`,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "token":sessionStorage.getItem("userToken")
-      },body:JSON.stringify({
-        product_id:product_id,
-        quantity:1
-      })
-    })
-
-
-    const json=await response.json()
-  
-    
-    if(json.success){
-      toast.success(json.message)
-    }
-    else{
-      toast.error(json.message)
+  const add_to_cart = async (product_id) => {
+    const token = sessionStorage.getItem("userToken");
+    if (!token) {
+      navigate("/login", { state: { message: "Please log in to add products to your cart." } });
+      return;
     }
 
+    setAddingProductId(product_id);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/cart/add-to-cart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token,
+        },
+        body: JSON.stringify({ product_id, quantity: 1 }),
+      });
+      const json = await response.json();
+
+      if (response.status === 401) {
+        sessionStorage.removeItem("userToken");
+        navigate("/login", { state: { message: json.message } });
+        return;
+      }
+
+      if (!response.ok || !json.success) {
+        toast.error(json.message || "Could not add this product to your cart.");
+        return;
+      }
+
+      toast.success(json.message || "Product added to cart.");
+    } catch (error) {
+      console.error("Failed to add product to cart:", error);
+      toast.error("Could not connect to the cart. Please try again.");
+    } finally {
+      setAddingProductId("");
+    }
   }
   const categories = Object.keys(data);
 
   if (categories.length === 0) {
     return (
-      <div className="flex min-h-72 items-center justify-center bg-orange-50 px-4">
-        <p className="text-sm font-medium text-gray-500">
-          No products available.
+      <div className="rr-empty-products flex min-h-72 items-center justify-center bg-orange-50 px-4">
+        <p className="max-w-xl text-center text-sm font-medium text-slate-600">
+          {isLoading
+            ? "Loading the incense collection…"
+            : hasError
+              ? "We couldn’t load the collection right now. Please refresh and try again."
+              : "The incense collection is being prepared. Please check back soon."}
         </p>
       </div>
     );
@@ -54,7 +71,7 @@ export default function HomeProductCard({ data = {} }) {
 
     <>
    <Toaster/>
-    <div className="bg-gradient-to-br from-orange-50 via-white to-yellow-50">
+    <div className="rr-collections bg-gradient-to-br from-orange-50 via-white to-yellow-50">
       {categories.map((categoryName) => {
         const products = data[categoryName] || [];
 
@@ -63,27 +80,29 @@ export default function HomeProductCard({ data = {} }) {
         return (
           <section
             key={categoryName}
-            className="border-b border-orange-100 py-10 sm:py-12"
+            id={`collection-${categoryName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+            data-voice-section={categoryName}
+            className="rr-collection border-b border-orange-100 py-10 sm:py-12"
           >
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rr-collection-inner mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
               {/* Category Heading */}
               <div className="mb-7 flex items-end justify-between gap-4">
-                <div>
-                  <span className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-orange-700">
+                <div className="rr-collection-heading">
+                  <span className="rr-eyebrow inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-orange-700">
                     Featured Collection
                   </span>
 
-                  <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">
+                  <h2 className="rr-collection-title mt-3 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">
                     {categoryName}
                   </h2>
 
-                  <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
+                  <p className="rr-collection-description mt-2 max-w-xl text-sm leading-6 text-gray-600">
                     Explore our premium-quality {categoryName.toLowerCase()}{" "}
                     products.
                   </p>
                 </div>
 
-                <Link to={`/fetch-products?category=${categoryName}`} className="hidden shrink-0 rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-bold text-orange-700 shadow-sm transition hover:border-orange-600 hover:bg-orange-600 hover:text-white sm:block">
+                <Link to={`/fetch-products?category=${categoryName}`} className="rr-view-all hidden shrink-0 rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-bold text-orange-700 shadow-sm transition hover:border-orange-600 hover:bg-orange-600 hover:text-white sm:block">
                   View All
                 </Link>
               </div>
@@ -113,7 +132,7 @@ export default function HomeProductCard({ data = {} }) {
                   },
                 }}
                 modules={[Pagination, Navigation]}
-                className="product-swiper !pb-10 sm:!pb-2"
+                className="product-swiper rr-product-swiper !pb-10 sm:!pb-2"
               >
                 {products.map((product) => {
                   const image =
@@ -128,9 +147,9 @@ export default function HomeProductCard({ data = {} }) {
 
                   return (
                     <SwiperSlide key={product._id} className="h-auto">
-                      <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-200/40">
+                      <article className="rr-product-card group flex h-full flex-col overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-orange-200 hover:shadow-xl hover:shadow-orange-200/40">
                         {/* Product Image */}
-                        <div className="relative overflow-hidden bg-orange-50">
+                        <div className="rr-product-image relative overflow-hidden bg-orange-50">
                           <img
                             src={image}
                             alt={product.title}
@@ -160,7 +179,7 @@ export default function HomeProductCard({ data = {} }) {
                         </div>
 
                         {/* Product Details */}
-                        <div className="flex flex-1 flex-col p-4">
+                        <div className="rr-product-info flex flex-1 flex-col p-4">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <span className="line-clamp-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-bold text-orange-700">
                               {product.category || categoryName}
@@ -225,11 +244,11 @@ export default function HomeProductCard({ data = {} }) {
 
                              {stock>0 ?<button
                                 type="button"
-                            
+                                disabled={addingProductId === product._id}
                                 onClick={()=>add_to_cart(product._id)}
                                 className="rounded-xl bg-orange-600 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-600/20 transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
                               >
-                                Add to Cart
+                                {addingProductId === product._id ? "Adding..." : "Add to Cart"}
                               </button>
 :
                               
@@ -249,7 +268,7 @@ export default function HomeProductCard({ data = {} }) {
                 })}
               </Swiper>
 
-              <button className="mt-4 w-full rounded-full bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 sm:hidden">
+              <button className="rr-view-all-mobile mt-4 w-full rounded-full bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 sm:hidden">
                 View All {categoryName}
               </button>
             </div>

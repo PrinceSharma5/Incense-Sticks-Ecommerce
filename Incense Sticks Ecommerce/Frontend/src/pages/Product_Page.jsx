@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import toast, { Toaster } from "react-hot-toast";
 import Navbar from "../components/Navbar";
@@ -10,10 +10,11 @@ const ProductDetailsPage = () => {
 
   const [product, setProduct] = useState(null);
   const [selectedImage, setSelectedImage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [addingToCart, setAddingToCart] = useState(false);
 
-  const fetchSpecificProduct = async () => {
+  const fetchSpecificProduct = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -34,7 +35,7 @@ const ProductDetailsPage = () => {
 
       if (!json.success) {
         toast.error(json.message || "Product not found");
-        navigate("/search-product");
+        navigate("/fetch-products");
         return;
       }
 
@@ -49,7 +50,7 @@ const ProductDetailsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
 
   const handleIncreaseQuantity = () => {
     if (!product) return;
@@ -76,75 +77,55 @@ const ProductDetailsPage = () => {
       return;
     }
 
-
-    const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/cart/add-to-cart`,{
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json",
-            "token":sessionStorage.getItem("userToken")
-        },body:JSON.stringify({
-            product_id:product._id,
-            quantity:quantity
-        })
-    })
-
-    const json=await response.json()
-
-    if(!json.success){
-        toast.error(json.message)
-        return
-    }
-
-    
-
-    const cartData = {
-      product_id: product._id,
-      product_title: product.title,
-      product_price: product.actual_price,
-      product_mrp: product.mrp,
-      product_discount: product.discount,
-      product_image: product.images?.[0] || "",
-      quantity,
-    };
-
-    console.log(cartData);
-
-    toast.success(`${quantity} item added to cart`);
-  };
-
-  const handleBuyNow = () => {
-    if (!product) return;
-
-    if (product.stock <= 0) {
-      toast.error("Product is out of stock");
+    const token = sessionStorage.getItem("userToken");
+    if (!token) {
+      navigate("/login", { state: { message: "Please log in to add products to your cart." } });
       return;
     }
 
-    const buyNowData = {
-      product_id: product._id,
-      product_title: product.title,
-      product_price: product.actual_price,
-      product_mrp: product.mrp,
-      product_discount: product.discount,
-      product_image: product.images?.[0] || "",
-      quantity,
-    };
+    setAddingToCart(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/cart/add-to-cart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          token,
+        },
+        body: JSON.stringify({
+          product_id: product._id,
+          quantity,
+        }),
+      });
+      const json = await response.json();
 
-    console.log(buyNowData);
+      if (response.status === 401) {
+        sessionStorage.removeItem("userToken");
+        navigate("/login", { state: { message: json.message } });
+        return;
+      }
 
-    toast.success("Redirecting to checkout...");
+      if (!response.ok || !json.success) {
+        toast.error(json.message || "Could not add this product to your cart.");
+        return;
+      }
+
+      toast.success(`${quantity} item${quantity === 1 ? "" : "s"} added to cart`);
+    } catch (error) {
+      console.error("Failed to add product to cart:", error);
+      toast.error("Could not connect to the cart. Please try again.");
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   useEffect(() => {
-    if (id) {
-      fetchSpecificProduct();
-    }
-  }, [id]);
+    if (id) void Promise.resolve().then(fetchSpecificProduct);
+  }, [id, fetchSpecificProduct]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
-        <section className="mx-auto max-w-7xl">
+      <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl" data-voice-section="product details">
           <div className="grid gap-8 lg:grid-cols-2">
             <div className="h-[420px] animate-pulse rounded-[2rem] bg-orange-100 sm:h-[500px]" />
 
@@ -164,7 +145,7 @@ const ProductDetailsPage = () => {
 
   if (!product) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-orange-50 px-4">
+      <main className="rr-page flex min-h-screen items-center justify-center bg-orange-50 px-4">
         <div className="rounded-[2rem] border border-orange-100 bg-white p-8 text-center shadow-xl shadow-orange-100">
           <h1 className="text-xl font-black text-gray-900">
             Product not found
@@ -175,7 +156,7 @@ const ProductDetailsPage = () => {
           </p>
 
           <button
-            onClick={() => navigate("/search-product")}
+            onClick={() => navigate("/fetch-products")}
             className="mt-6 rounded-2xl bg-orange-600 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700"
           >
             Back to Products
@@ -199,8 +180,8 @@ const ProductDetailsPage = () => {
     <>
     <Navbar/>
     <Toaster/>
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto max-w-7xl">
+    <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl" data-voice-section="product details">
         {/* Top Bar */}
         <div className="mb-6 flex items-center justify-between gap-4">
           <button
@@ -419,11 +400,12 @@ const ProductDetailsPage = () => {
             <div className="mt-7 grid gap-3 sm:grid-cols-2">
               {stock > 0 ?<button
                 type="button"
+                disabled={addingToCart}
                 onClick={handleAddCart}
                 
                 className="rounded-2xl bg-orange-600 px-6 py-3.5 text-xs font-black text-white shadow-lg shadow-orange-600/25 transition hover:-translate-y-0.5 hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:shadow-none"
               >
-                Add to Cart
+                {addingToCart ? "Adding..." : "Add to Cart"}
               </button>
 :
                  <button

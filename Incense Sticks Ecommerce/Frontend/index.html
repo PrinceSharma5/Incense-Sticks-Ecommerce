@@ -1,15 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <meta name="description" content="Discover thoughtful incense and small rituals for slower mornings, softer evenings, and a calmer everyday." />
+    <meta name="theme-color" content="#020617" />
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("aura-ember-theme") === "light" ? "light" : "dark";
+        document.documentElement.dataset.theme = savedTheme;
+        document.documentElement.style.colorScheme = savedTheme;
+        document.querySelector("meta[name='theme-color']")?.setAttribute(
+          "content",
+          savedTheme === "dark" ? "#020617" : "#fafaf9"
+        );
+      } catch {
+        // Dark mode is the default when browser storage is unavailable.
+      }
+    </script>
+    <title>wer | Aura &amp; Ember Incense</title>
   </head>
   <body>
     <div id="root"></div>
 
-        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script src="https://kit.fontawesome.com/456892faf1.js" crossorigin="anonymous"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -3,11 +3,12 @@ const express = require("express");
 
 const { body } = require("express-validator");
 const router = express().router
+const verifyAdminToken = require("../middleware/verifyAdminToken");
 
 
 const { login_admin, create_new_admin } = require("../controller/adminController");
 
-router.post("/create-new-admin",[
+router.post("/create-new-admin",verifyAdminToken,[
     body("name").isLength({min:2,max:26}).withMessage("Name Should be between 2 to 26 characters"),
     body("email").isEmail().withMessage("Please enter a valid email"),
     body("mobile_no").isMobilePhone("en-IN").withMessage("Please enter a valid mobile number"),

@@ -10,6 +10,7 @@ const productRouter=require("./routes/productRoute")
 const orderRouter=require("./routes/orderRoute")
 
 const userRouter=require("./routes/userRoute")
+const chatRouter=require("./routes/chatRoute")
 
 const cartRouter=require("./routes/cartRoute")
 
@@ -27,6 +28,7 @@ app.use("/api/category",categoryRouter)
 app.use("/api/product",productRouter)
 app.use("/api/order",orderRouter)
 app.use("/api/user",userRouter)
+app.use("/api/chat",chatRouter)
 app.use("/api/cart",cartRouter)
 app.use("/api/coupon-code",unusedCouponCodeRouter)
 app.listen(process.env.PORT, ()=>{

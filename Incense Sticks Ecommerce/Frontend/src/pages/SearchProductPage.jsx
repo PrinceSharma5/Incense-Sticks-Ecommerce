@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import InfiniteScroll from "react-infinite-scroller";
 import Navbar from "../components/Navbar";
@@ -12,17 +12,13 @@ const SearchProductPage = () => {
   const [data, setData] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [skip, setSkip] = useState(0);
-  const [search, setSearch] = useState("");
-  const [isFirstLoading, setIsFirstLoading] = useState(false);
+  const [isFirstLoading, setIsFirstLoading] = useState(true);
   const [isMoreLoading, setIsMoreLoading] = useState(false);
 
   const category = params.get("category") || "";
+  const search = params.get("search") || "";
 
-  const fetchData = async ({
-    searchValue = search,
-    skipValue = skip,
-    reset = false,
-  } = {}) => {
+  const fetchData = useCallback(async ({ searchValue, skipValue, reset = false }) => {
     try {
       if (reset) {
         setIsFirstLoading(true);
@@ -84,9 +80,9 @@ const SearchProductPage = () => {
       setIsFirstLoading(false);
       setIsMoreLoading(false);
     }
-  };
+  }, [category]);
 
-  const resetAndFetch = (searchValue = search) => {
+  const resetAndFetch = useCallback((searchValue = search) => {
     setData([]);
     setSkip(0);
     setHasMore(true);
@@ -96,33 +92,37 @@ const SearchProductPage = () => {
       skipValue: 0,
       reset: true,
     });
-  };
+  }, [fetchData, search]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
-    setSearch(value);
-    resetAndFetch(value);
+    const nextParams = new URLSearchParams(params);
+    if (value.trim()) nextParams.set("search", value);
+    else nextParams.delete("search");
+    setParams(nextParams, { replace: true });
   };
 
   const handleClearSearch = () => {
-    setSearch("");
-    resetAndFetch("");
+    const nextParams = new URLSearchParams(params);
+    nextParams.delete("search");
+    setParams(nextParams, { replace: true });
   };
 
   const handleRemoveCategory = () => {
-    params.delete("category");
-    setParams(params);
+    const nextParams = new URLSearchParams(params);
+    nextParams.delete("category");
+    setParams(nextParams);
   };
 
   useEffect(() => {
-    resetAndFetch(search);
-  }, [category]);
+    void Promise.resolve().then(() => resetAndFetch(search));
+  }, [resetAndFetch, search]);
 
   return (
     <>
     <Navbar/>
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 px-4 py-10 sm:px-6 lg:px-8">
-      <section className="mx-auto max-w-7xl">
+    <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 px-4 py-10 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl" data-voice-section="product results">
         {/* Header */}
         <div className="mb-8 rounded-3xl border border-orange-100 bg-white p-5 shadow-sm sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">

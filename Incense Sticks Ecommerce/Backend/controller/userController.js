@@ -78,15 +78,13 @@ const generate_otp=async(req,res)=>{
         }
 
         const {email}=req.body
-        const newOTP=await generateRandomSixDigit(email)
-
-        console.log(newOTP);
+        await generateRandomSixDigit(email)
         
-        return res.status(200).json({message:"OTP Sent Successfully",success:true,otp:newOTP})
+        return res.status(200).json({message:"OTP Sent Successfully",success:true})
     } catch (error) {
-        console.log(error);
+        console.error("OTP email failed:", error.code || "unknown error")
         
-        return res.status(500).json({message:"Internal Server Error",success:false})
+        return res.status(500).json({message:"Unable to send OTP email. Please try again.",success:false})
 
     }
 }

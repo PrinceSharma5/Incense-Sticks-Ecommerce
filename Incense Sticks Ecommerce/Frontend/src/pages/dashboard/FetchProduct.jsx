@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DashboardNavbar from "../../components/dashboard/Header";
 import { useNavigate } from "react-router";
 import InfiniteScroll from "react-infinite-scroller";

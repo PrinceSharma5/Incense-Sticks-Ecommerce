@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import toast, { Toaster } from "react-hot-toast";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 const Login = () => {
   const [activeTab, setActiveTab] = useState("login");
 
+  const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -14,6 +15,12 @@ const Login = () => {
       navigate("/");
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (location.state?.message) {
+      toast.error(location.state.message);
+    }
+  }, [location.state]);
 
   const [loginData, setLoginData] = useState({
     email: "",
@@ -309,7 +316,7 @@ const Login = () => {
       />
 
 
-      <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 px-4 py-10">
+      <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-yellow-50 px-4 py-10">
         <section className="mx-auto flex min-h-[calc(100vh-80px)] max-w-6xl items-center justify-center">
           <div className="grid w-full overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl shadow-orange-200/50 lg:grid-cols-2">
             {/* Left Side */}

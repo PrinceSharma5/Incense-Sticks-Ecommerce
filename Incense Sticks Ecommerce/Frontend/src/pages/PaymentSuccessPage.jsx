@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -9,7 +8,7 @@ const PaymentSuccessPage = () => {
   return (
     <>
     <Navbar/>
-    <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="rr-page rr-page-success min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 px-4 py-8 sm:px-6 lg:px-8">
       <section className="mx-auto flex min-h-[calc(100vh-64px)] max-w-5xl items-center justify-center">
         <div className="w-full overflow-hidden rounded-[2rem] border border-green-100 bg-white/90 shadow-2xl shadow-green-100/70 backdrop-blur">
           <div className="grid lg:grid-cols-[1.05fr_0.95fr]">

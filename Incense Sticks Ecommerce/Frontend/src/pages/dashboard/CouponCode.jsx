@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import DashboardNavbar from "../../components/dashboard/Header";
 import toast from "react-hot-toast";
@@ -16,15 +16,7 @@ const CouponCode = () => {
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(false);
 
-  useEffect(() => {
-    if (!sessionStorage.getItem("adminToken")) {
-      navigate("/dashboard/login");
-    } else {
-      fetchCouponCodes();
-    }
-  }, [navigate]);
-
-  const fetchCouponCodes = async () => {
+  const fetchCouponCodes = useCallback(async () => {
     try {
       setFetchLoading(true);
 
@@ -52,7 +44,15 @@ const CouponCode = () => {
     } finally {
       setFetchLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionStorage.getItem("adminToken")) {
+      navigate("/dashboard/login");
+    } else {
+      void Promise.resolve().then(fetchCouponCodes);
+    }
+  }, [fetchCouponCodes, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

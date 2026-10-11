@@ -18,6 +18,35 @@ const instance = new Razorpay({
 
 
 
+router.get("/fetch-my-orders", verifyToken, async (req, res) => {
+    try {
+        const orders = await OrderModel.find({ user_id: req.token._id })
+            .select("_id order_details total_amount createdAt")
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean()
+
+        const data = orders.map((order) => ({
+            _id: String(order._id),
+            total_amount: order.total_amount,
+            createdAt: order.createdAt,
+            order_details: (order.order_details || []).map((item) => ({
+                product_title: item.product_title,
+                product_quantity: item.product_quantity,
+            })),
+        }))
+
+        return res.status(200).json({
+            message: "Your recent orders were fetched successfully",
+            success: true,
+            data,
+        })
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ message: "Internal Server Error", success: false })
+    }
+})
+
 router.post("/create-user-order",verifyToken,[
     body("coupon_code").isString().withMessage("Invalid Coupon Code").optional()
 ],async(req,res)=>{
@@ -44,21 +73,16 @@ router.post("/create-user-order",verifyToken,[
             return res.status(400).json({message:"Cart is Empty",success:false})
         }
 
-        await Promise.all( cart_data.map((ele)=>{
-         
-            
+        cart_data.forEach((ele)=>{
             total_amount+=ele.product_price * ele.quantity
             items.push(`${ele.product_title} x ${ele.quantity}`)
+        })
 
-        }))
+        const mynotes={ user_id: String(exist_user._id) }
 
-        const mynotes={}
-
-        await Promise.all( items.map((ele,index)=>{
-            console.log(ele);
-            
+        items.forEach((ele,index)=>{
             mynotes[`key${index+1}`]=ele
-        }))
+        })
 
 
         let final_discount=0
@@ -77,27 +101,42 @@ router.post("/create-user-order",verifyToken,[
 
             
             const discount_price=(total_amount*exist_coupon.discount)/100
-            if(discount_price>exist_coupon.maxDiscount){
-                final_discount=exist_coupon.maxDiscount
-            }
+            final_discount=Math.min(discount_price,exist_coupon.maxDiscount,total_amount)
 
         }
 
-        
+        const tax_amount=Math.round(total_amount*0.05)
+        const amount_in_rupees=total_amount+tax_amount-final_discount
+        const amount_in_paise=Math.round(amount_in_rupees*100)
+        if(!Number.isSafeInteger(amount_in_paise) || amount_in_paise<=0){
+            return res.status(400).json({message:"The cart total is invalid",success:false})
+        }
+
         const order= await instance.orders.create({
-  amount: (total_amount - final_discount) * 100,
+  amount: amount_in_paise,
   currency: "INR",
   notes: mynotes
 })
 
 
-return res.status(200).json({message:"Order Created Successfully",success:true,order})
+return res.status(200).json({
+    message:"Order Created Successfully",
+    success:true,
+    order,
+    pricing:{subtotal:total_amount,tax:tax_amount,discount:final_discount,total:amount_in_paise/100}
+})
         
     } catch (error) {
-        
-        console.log(error);
-        
-        return res.status(500).json({message:"Internal Server Error",success:false})
+        const gatewayMessage=error?.error?.description
+        const networkFailure=!error?.response && !gatewayMessage
+        const message=networkFailure
+            ? "The server could not connect to Razorpay. Check its internet connection and try again."
+            : gatewayMessage || "Razorpay could not create a payment order. Please try again."
+        console.error("Razorpay order creation failed:",message)
+        return res.status(502).json({
+            message,
+            success:false
+        })
     }
 })
 
@@ -109,16 +148,13 @@ body("razorpay_signature").isString().withMessage("Invalid Signature"),
 body("name").isString().withMessage("Invalid Name"),
 body("email").isEmail().withMessage("Invalid Email"),
 body("mobile_no").isMobilePhone("en-IN").withMessage("Invalid Phone Number"),
-body("address").isString().withMessage("Invalid Address"),,
+body("address").isString().withMessage("Invalid Address"),
 body("city").isString().withMessage("Invalid City"),
 body("state").isString().withMessage("Invalid State"),
 body("pincode").isNumeric().withMessage("Invalid Pincode"),
-body("total_amount").isNumeric().withMessage("Invalid Total Amount"),
 
 ],async(req,res)=>{
     try {
-        
-        console.log(req.body);
         
         const errors=validationResult(req)
         if(!errors.isEmpty()){
@@ -129,11 +165,24 @@ body("total_amount").isNumeric().withMessage("Invalid Total Amount"),
         if(!exist_user){
             return res.status(400).json({message:"Invalid Authentication",success:false})
         }
-        const {razorpay_order_id,razorpay_payment_id,razorpay_signature,name,email,mobile_no,address,city,state,pincode,total_amount}=req.body
+        const {razorpay_order_id,razorpay_payment_id,razorpay_signature,name,email,mobile_no,address,city,state,pincode}=req.body
      const flag=validatePaymentVerification({"order_id": razorpay_order_id, "payment_id": razorpay_payment_id },razorpay_signature, process.env.RAZORPAY_SECRET);
 
      if(!flag){
         return res.status(400).json({message:"Invalid Transaction",success:false})
+     }
+
+     const [razorpayOrder,razorpayPayment]=await Promise.all([
+        instance.orders.fetch(razorpay_order_id),
+        instance.payments.fetch(razorpay_payment_id),
+     ])
+     if(
+        String(razorpayOrder.notes?.user_id)!==String(exist_user._id) ||
+        razorpayPayment.order_id!==razorpay_order_id ||
+        razorpayPayment.amount!==razorpayOrder.amount ||
+        razorpayPayment.currency!==razorpayOrder.currency
+     ){
+        return res.status(400).json({message:"Payment details do not match this order",success:false})
      }
 
 
@@ -165,7 +214,7 @@ body("total_amount").isNumeric().withMessage("Invalid Total Amount"),
     city:city,
     state:state,
     pincode:pincode,
-    total_amount:total_amount,
+    total_amount:razorpayOrder.amount/100,
     order_details:orderdetails,
     razorpay_payment_id:razorpay_payment_id,
     razorpay_order_id:razorpay_order_id,
@@ -174,10 +223,9 @@ body("total_amount").isNumeric().withMessage("Invalid Total Amount"),
   
 
    await newOrder.save()
-   cart_data.map(async(ele)=>{
-    
-    const updateProductStock=await ProductModel.findOneAndUpdate({_id:ele.product_id},{$inc:{stock:-ele.quantity}})
-   })
+   await Promise.all(cart_data.map((ele)=>
+    ProductModel.findOneAndUpdate({_id:ele.product_id},{$inc:{stock:-ele.quantity}})
+   ))
    await CartModel.deleteMany({user_id:exist_user._id})
     
 
@@ -185,7 +233,7 @@ body("total_amount").isNumeric().withMessage("Invalid Total Amount"),
 
       return res.status(200).json({message:"Payment Successfull",success:true})
     } catch (error) {
-        
+        console.error("Payment verification failed:",error?.error?.description || error?.message)
      return res.status(500).json({message:"Internal Server Error",success:false})
     }
 })

@@ -158,7 +158,7 @@ const delete_specific_product=async(req,res)=>{
         exist_product.images.map((ele)=>{
 
             const jonPath=path.join(process.cwd(),"statics","product_images","/")
-            let newUrl=ele.replace("http://localhost:8500/assets/product_images/","")
+            let newUrl=path.basename(new URL(ele).pathname)
          
 
            if(fs.existsSync(jonPath+newUrl)){
@@ -271,7 +271,7 @@ const update_my_product_images=async(req,res)=>{
       
 
           const jonPath=path.join(process.cwd(),"statics","product_images","/")
-            let newUrl=exist_product.images[index].replace("http://localhost:8500/assets/product_images/","")
+            let newUrl=path.basename(new URL(exist_product.images[index]).pathname)
          
 
         return res.status(200).json({message:"Image Updated Successfully",success:true})

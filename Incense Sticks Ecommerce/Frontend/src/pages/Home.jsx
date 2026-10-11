@@ -1,42 +1,67 @@
-import React, { useEffect, useState } from 'react'
-import HomeProductCard from '../components/HomeProductCard'
-
-import HeroSection from '../components/HeroSection'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
+import { useEffect, useState } from "react";
+import HomeProductCard from "../components/HomeProductCard";
+import HeroSection from "../components/HeroSection";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 
 const Home = () => {
+  const [productsByCategory, setProductsByCategory] = useState({});
+  const [isCatalogLoading, setIsCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
 
+  useEffect(() => {
+    let isCurrent = true;
 
-  const [data, setdata] = useState({})
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_BASE_URL}/api/product/fetch-all-products`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skip: 0 }),
+          }
+        );
+        const result = await response.json();
 
-  const fetchCatalogueData=async()=>{
-    const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/product/fetch-data-with-category`,{
-      method:"POST"
-    })
+        if (!response.ok || !result.success || !Array.isArray(result.data)) {
+          throw new Error(result.message || "Could not load products.");
+        }
 
+        const groupedProducts = result.data.reduce((groups, product) => {
+          const category = product.category?.trim() || "Incense";
+          groups[category] ??= [];
+          if (groups[category].length < 20) groups[category].push(product);
+          return groups;
+        }, {});
 
-    const json=await response.json()
-    if(json.success){
-      setdata(json.data)
-    }
-    console.log(json);
-    
-  }
-useEffect(()=>{
+        if (isCurrent) setProductsByCategory(groupedProducts);
+      } catch (error) {
+        console.error("Failed to load the admin product catalog:", error);
+        if (isCurrent) setCatalogError(true);
+      } finally {
+        if (isCurrent) setIsCatalogLoading(false);
+      }
+    };
 
-  fetchCatalogueData()
-},[])
+    void fetchProducts();
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   return (
-  <>
-  <Navbar/>
+    <>
+      <Navbar />
+      <HeroSection />
+      <HomeProductCard
+        data={productsByCategory}
+        isLoading={isCatalogLoading}
+        hasError={catalogError}
+      />
+      <Footer />
+    </>
+  );
+};
 
-  <HeroSection/>
-  <HomeProductCard data={data}/>
-  <Footer/>
-  </>
-  )
-}
-
-export default Home
+export default Home;

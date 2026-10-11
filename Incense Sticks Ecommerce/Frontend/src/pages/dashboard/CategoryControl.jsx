@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useActionState } from "react";
+import { useCallback, useEffect, useState, useActionState } from "react";
 import DashboardNavbar from "../../components/dashboard/Header";
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
@@ -11,7 +11,7 @@ const CategoryControl = () => {
   const [updateName, setUpdateName] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [isFetching, setIsFetching] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
   useEffect(() => {
     if (!sessionStorage.getItem("adminToken")) {
@@ -19,7 +19,7 @@ const CategoryControl = () => {
     }
   }, [navigate]);
 
-  const fetchAllCategories = async () => {
+  const fetchAllCategories = useCallback(async () => {
     try {
       setIsFetching(true);
 
@@ -43,11 +43,11 @@ const CategoryControl = () => {
     } finally {
       setIsFetching(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAllCategories();
-  }, []);
+    void Promise.resolve().then(fetchAllCategories);
+  }, [fetchAllCategories]);
 
   const handleSubmit = async (oldData, newData) => {
     const name = newData.get("name");

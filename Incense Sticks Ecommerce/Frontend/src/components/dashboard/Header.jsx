@@ -11,6 +11,7 @@ import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import {
   Bars3Icon,
   BellIcon,
+  HomeIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -116,6 +117,13 @@ export default function DashboardNavbar() {
 
           {/* Desktop Right */}
           <div className="hidden items-center gap-3 lg:flex">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold text-slate-300 transition hover:border-emerald-400/30 hover:bg-white/[0.1] hover:text-white"
+            >
+              <HomeIcon aria-hidden="true" className="h-4 w-4" />
+              Back to Main Site
+            </Link>
             <button
               type="button"
               className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-slate-300 transition hover:bg-white/[0.1] hover:text-white"
@@ -253,6 +261,14 @@ export default function DashboardNavbar() {
                 </DisclosureButton>
               );
             })}
+            <DisclosureButton
+              as={Link}
+              to="/"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-base font-bold text-slate-300 transition hover:border-emerald-400/30 hover:bg-white/[0.1] hover:text-white"
+            >
+              <HomeIcon aria-hidden="true" className="h-5 w-5" />
+              Back to Main Site
+            </DisclosureButton>
           </div>
         </div>
 

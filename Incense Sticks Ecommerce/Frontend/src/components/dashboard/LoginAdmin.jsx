@@ -1,6 +1,7 @@
 import { useActionState, useEffect } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { HomeIcon } from "@heroicons/react/24/outline";
 
 export default function LoginAdmin() {
 const navigate=useNavigate()
@@ -11,15 +12,12 @@ useEffect(()=>{
 if(sessionStorage.getItem("adminToken")){
   navigate("/dashboard")
 }
-},[])
+},[navigate])
 const handleSubmit=async(olddata,formData)=>{
 
 const email=formData.get("email")
 const password=formData.get("password")
 
-    console.log(email);
-    console.log(password);
-    
     const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/admin/admin-login`,{
         method:"POST",
         headers:{
@@ -45,7 +43,6 @@ else{
   toast.error(json.message)
   return {
     email:email,
-    password:password,
     error:json.message
   }
 }
@@ -53,14 +50,12 @@ else{
 
     return {
         email:"",
-        password:"",
         error:""
     }
 }
 
     const [state,formAction,isPending]=useActionState(handleSubmit, {
         email:"",
-        password:"",
         error:""
     })
   return (
@@ -114,7 +109,6 @@ else{
                 <input
                   type="password"
                   name="password"
-                  defaultValue={state.password}
                   placeholder="Enter your password"
                   className="w-full rounded-2xl border border-white/10 bg-white/10 px-5 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white/15 focus:ring-4 focus:ring-blue-500/20"
                 />
@@ -125,15 +119,24 @@ else{
               {/* Button */}
               <button
                 type="submit"
+                disabled={isPending}
                 className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/30 transition hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/30 active:scale-[0.98]"
               >
-                Login to Dashboard
+                {isPending ? "Signing in..." : "Login to Dashboard"}
               </button>
             </form>
 
             <p className="mt-8 text-center text-xs text-slate-400">
               Secure admin access only
             </p>
+
+            <Link
+              to="/"
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-emerald-300/40 hover:bg-white/10 hover:text-white"
+            >
+              <HomeIcon aria-hidden="true" className="h-4 w-4" />
+              Back to Main Site
+            </Link>
           </div>
         </div>
       </div>

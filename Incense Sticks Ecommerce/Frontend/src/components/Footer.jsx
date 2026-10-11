@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router";
 
 const navigation = {
@@ -53,7 +52,7 @@ const navigation = {
 
 const Footer = () => {
   return (
-    <footer className="relative overflow-hidden bg-gradient-to-br from-gray-950 via-neutral-900 to-black text-white">
+    <footer className="rr-footer relative overflow-hidden bg-gradient-to-br from-gray-950 via-neutral-900 to-black text-white">
       <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-orange-500/10 blur-3xl" />
       <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" />
 
@@ -62,34 +61,33 @@ const Footer = () => {
           <div>
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-600 via-amber-500 to-yellow-400 shadow-lg shadow-orange-500/20">
-                <span className="text-xl font-black text-white">R</span>
+                <span className="text-xl font-black text-white">A</span>
               </div>
 
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-white">
-                  Raghu Rash
+                  Aura &amp; Ember
                 </h2>
                 <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-orange-300">
-                  Organic Store
+                  A little calm, every day
                 </p>
               </div>
             </div>
 
             <p className="mt-5 max-w-xl text-sm leading-7 text-gray-300">
-              Premium organic products crafted with care, purity, and trust.
-              Bring wellness, freshness, and natural goodness into your daily
-              life with products made for modern living.
+              Thoughtfully made incense for slow mornings, quiet evenings, and
+              the small rituals that make a day feel like your own.
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
               <span className="rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-xs font-bold text-orange-200">
-                100% Pure
+                Made with care
               </span>
               <span className="rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-xs font-bold text-orange-200">
                 Fast Delivery
               </span>
               <span className="rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-xs font-bold text-orange-200">
-                Trusted Quality
+                Everyday ritual
               </span>
             </div>
           </div>
@@ -142,7 +140,7 @@ const Footer = () => {
 
         <div className="mt-8 flex flex-col gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
           <p className="text-sm text-gray-400">
-            &copy; 2026 Raghu Rash Organic Store. All rights reserved.
+            &copy; 2026 Aura &amp; Ember. All rights reserved.
           </p>
 
           <div className="flex items-center justify-center gap-4 text-xs font-medium text-gray-400 sm:justify-end">

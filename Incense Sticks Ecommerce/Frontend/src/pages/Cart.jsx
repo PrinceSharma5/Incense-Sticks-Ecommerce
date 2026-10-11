@@ -1,15 +1,62 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import toast, { Toaster } from "react-hot-toast";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
+let razorpaySdkPromise;
+
+const loadRazorpayCheckout = () => {
+  if (typeof window.Razorpay === "function") {
+    return Promise.resolve(window.Razorpay);
+  }
+
+  if (razorpaySdkPromise) return razorpaySdkPromise;
+
+  razorpaySdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    let settled = false;
+
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      script.remove();
+      razorpaySdkPromise = null;
+      reject(new Error("RAZORPAY_SDK_UNAVAILABLE"));
+    };
+
+    const timeoutId = window.setTimeout(fail, 15000);
+    script.addEventListener(
+      "load",
+      () => {
+        if (settled) return;
+        window.clearTimeout(timeoutId);
+        if (typeof window.Razorpay === "function") {
+          settled = true;
+          resolve(window.Razorpay);
+        } else {
+          fail();
+        }
+      },
+      { once: true }
+    );
+    script.addEventListener("error", fail, { once: true });
+    document.head.appendChild(script);
+  });
+
+  return razorpaySdkPromise;
+};
+
 const CartPage = () => {
   const navigate = useNavigate();
 
   const [cartData, setCartData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const [checkoutData, setCheckoutData] = useState({
     name: "",
@@ -32,11 +79,10 @@ const CartPage = () => {
     }));
   };
 
-  const fetchCartProducts = async () => {
+  const fetchCartProducts = useCallback(async () => {
     try {
       if (!token) {
-        toast.error("Please login first");
-        navigate("/login");
+        navigate("/login", { state: { message: "Please log in to view your cart." } });
         return;
       }
 
@@ -55,6 +101,12 @@ const CartPage = () => {
 
       const json = await response.json();
 
+      if (response.status === 401) {
+        sessionStorage.removeItem("userToken");
+        navigate("/login", { state: { message: json.message } });
+        return;
+      }
+
       if (!json.success) {
         toast.error(json.message || "Failed to fetch cart");
         return;
@@ -67,7 +119,7 @@ const CartPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, token]);
 
   const handleIncreaseQuantity = async (item) => {
     try {
@@ -225,7 +277,9 @@ const CartPage = () => {
     };
   }, [cartData]);
 
-  const handleProceedCheckout =async () => {
+  const handleProceedCheckout = async () => {
+    if (checkoutLoading) return;
+
     if (cartData.length === 0) {
       toast.error("Your cart is empty");
       return;
@@ -276,121 +330,147 @@ const CartPage = () => {
       return;
     }
 
+    const token = sessionStorage.getItem("userToken");
+    if (!token) {
+      navigate("/login", { state: { message: "Please log in before checking out." } });
+      return;
+    }
 
-    const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/order/create-user-order`,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "token":sessionStorage.getItem("userToken")
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_ID;
+    if (!razorpayKey) {
+      toast.error("Razorpay is not configured. Add the payment key and restart the frontend.");
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      const RazorpayCheckout = await loadRazorpayCheckout();
+      const orderResponse = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/order/create-user-order`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            token,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      const orderResult = await orderResponse.json();
+
+      if (orderResponse.status === 401) {
+        sessionStorage.removeItem("userToken");
+        navigate("/login", { state: { message: orderResult.message } });
+        setCheckoutLoading(false);
+        return;
       }
-    })
 
-    const json=await response.json()
-    console.log(json);
+      const razorpayOrder = orderResult.order;
+      const amountInPaise = Number(razorpayOrder?.amount);
+      if (
+        !orderResponse.ok ||
+        !orderResult.success ||
+        !razorpayOrder?.id ||
+        !Number.isInteger(amountInPaise) ||
+        amountInPaise <= 0
+      ) {
+        toast.error(orderResult.message || "Could not create a Razorpay order. Please try again.");
+        setCheckoutLoading(false);
+        return;
+      }
 
-    if(json.success){
       const options = {
-    "key": import.meta.env.VITE_RAZORPAY_ID, // Enter the Key ID generated from the Dashboard
-    "amount": json.order.amount, // Amount is in currency subunits. 
-    "currency": "INR",
-    "name": "Raghu Rash Insence Sticks",
-  
-    "image": "https://example.com/your_logo",
-    "order_id": json.order.id, //This is a sample Order ID. Pass the `id` obtained in the response of Step 1
-    "handler": async function (response){
+        key: razorpayKey,
+        amount: amountInPaise,
+        currency: razorpayOrder.currency || "INR",
+        name: "Aura & Ember Incense Sticks",
+        description: "Incense order payment",
+        order_id: razorpayOrder.id,
+        prefill: {
+          name: checkoutData.name,
+          email: checkoutData.email,
+          contact: `+91${checkoutData.mobile_no}`,
+        },
+        notes: {
+          address: `${checkoutData.address}, ${checkoutData.city}, ${checkoutData.state} ${checkoutData.pincode}`,
+        },
+        theme: { color: "#ea580c" },
+        modal: {
+          ondismiss: () => setCheckoutLoading(false),
+        },
+        handler: async (paymentResponse) => {
+          try {
+            const verifyResponse = await fetch(
+              `${import.meta.env.VITE_BASE_URL}/api/order/verify-user-order`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  token: sessionStorage.getItem("userToken"),
+                },
+                body: JSON.stringify({
+                  name: checkoutData.name,
+                  email: checkoutData.email,
+                  mobile_no: checkoutData.mobile_no,
+                  address: checkoutData.address,
+                  pincode: checkoutData.pincode,
+                  state: checkoutData.state,
+                  city: checkoutData.city,
+                  total_amount: amountInPaise / 100,
+                  razorpay_order_id: paymentResponse.razorpay_order_id,
+                  razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                  razorpay_signature: paymentResponse.razorpay_signature,
+                }),
+              }
+            );
+            const verificationResult = await verifyResponse.json();
 
-      const verifyresponse=await fetch(`${import.meta.env.VITE_BASE_URL}/api/order/verify-user-order`,{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "token":sessionStorage.getItem("userToken")
-        },body:JSON.stringify({
-          name:checkoutData.name,
-          email:checkoutData.email,
-          mobile_no:checkoutData.mobile_no,
-          address:checkoutData.address,
-          pincode:checkoutData.pincode,
-          state:checkoutData.state,
-          city:checkoutData.city,
-          total_amount:cartSummary.grandTotal,
-          razorpay_order_id:response.razorpay_order_id,
-          razorpay_payment_id:response.razorpay_payment_id,
-          razorpay_signature:response.razorpay_signature
-        })
-      })
+            if (verifyResponse.status === 401) {
+              sessionStorage.removeItem("userToken");
+              navigate("/login", { state: { message: verificationResult.message } });
+              return;
+            }
 
-      const json=await verifyresponse.json()
+            if (!verifyResponse.ok || !verificationResult.success) {
+              toast.error(verificationResult.message || "Payment was received but could not be verified. Contact support.");
+              return;
+            }
 
-      if(json.success){
-        navigate("/payment-success")
-      }
-      else{
-        toast.error(json.message)
-      }
-      
-      
-        // alert(response.razorpay_payment_id);
-        // alert(response.razorpay_order_id);
-        // alert(response.razorpay_signature)
-    },
-    "prefill": {
-        "name": checkoutData.name,
-        "email": checkoutData.email,
-        "contact": "+91"+ checkoutData.mobile_no
-    },
-    "notes": {
-        "address": checkoutData.address + " " + checkoutData.city + " " + checkoutData.state + " " + checkoutData.pincode
-    },
-    "theme": {
-        "color": "#3399cc"
+            navigate("/payment-success");
+          } catch (error) {
+            console.error("Payment verification failed:", error);
+            toast.error("Could not verify the payment. Please contact support before trying again.");
+          } finally {
+            setCheckoutLoading(false);
+          }
+        },
+      };
+
+      const checkout = new RazorpayCheckout(options);
+      checkout.on("payment.failed", (event) => {
+        toast.error(event?.error?.description || "Payment failed. Please try another payment method.");
+        setCheckoutLoading(false);
+      });
+      checkout.open();
+    } catch (error) {
+      console.error("Could not start Razorpay checkout:", error);
+      toast.error(
+        error?.message === "RAZORPAY_SDK_UNAVAILABLE"
+          ? "Razorpay could not load. Check your internet connection or network blocker, then try again."
+          : "Could not start Razorpay checkout. Check your connection and try again."
+      );
+      setCheckoutLoading(false);
     }
-
-
-};
-
-
-var rzp1 = new Razorpay(options);
-rzp1.on('payment.failed', function (response){
-        alert(response.error.code);
-        alert(response.error.description);
-        alert(response.error.source);
-        alert(response.error.step);
-        alert(response.error.reason);
-        alert(response.error.metadata.order_id);
-        alert(response.error.metadata.payment_id);
-});
-rzp1.open();
-    }
-    
-
-    const orderPayload = {
-      total_amount: cartSummary.grandTotal,
-      name: checkoutData.name,
-      email: checkoutData.email,
-      mobile_no: checkoutData.mobile_no,
-      address: checkoutData.address,
-      city: checkoutData.city,
-      state: checkoutData.state,
-      pincode: checkoutData.pincode,
-      cart_items: cartData,
-    };
-
-    console.log("Order Payload:", orderPayload);
-
-    toast.success("Checkout data ready");
-
-    // Later call your order/payment API here
-    // navigate("/checkout", { state: orderPayload });
   };
 
   useEffect(() => {
-    fetchCartProducts();
-  }, []);
+    void Promise.resolve().then(fetchCartProducts);
+  }, [fetchCartProducts]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
-        <section className="mx-auto max-w-7xl">
+      <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl" data-voice-section="cart contents">
           <div className="mb-8 h-10 w-48 animate-pulse rounded-xl bg-orange-100" />
 
           <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
@@ -416,8 +496,8 @@ rzp1.open();
 
     <Navbar/>
    <Toaster/>
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto max-w-7xl">
+    <main className="rr-page min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 px-4 py-8 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl" data-voice-section="cart contents">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <button
@@ -456,7 +536,7 @@ rzp1.open();
             </p>
 
             <button
-              onClick={() => navigate("/search-product")}
+              onClick={() => navigate("/fetch-products")}
               className="mt-7 rounded-2xl bg-orange-600 px-7 py-3.5 text-xs font-black text-white shadow-lg shadow-orange-600/25 transition hover:bg-orange-700"
             >
               Continue Shopping
@@ -550,7 +630,7 @@ rzp1.open();
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(`/product/${item.product_id}`)
+                              navigate(`/product-page/${item.product_id}`)
                             }
                             className="w-fit rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3 text-xs font-black text-orange-700 transition hover:bg-orange-100"
                           >
@@ -688,15 +768,16 @@ rzp1.open();
 
               <button
                 type="button"
+                disabled={checkoutLoading}
                 onClick={handleProceedCheckout}
-                className="mt-6 w-full rounded-2xl bg-orange-600 px-6 py-4 text-xs font-black text-white shadow-lg shadow-orange-600/25 transition hover:-translate-y-0.5 hover:bg-orange-700"
+                className="mt-6 w-full rounded-2xl bg-orange-600 px-6 py-4 text-xs font-black text-white shadow-lg shadow-orange-600/25 transition hover:-translate-y-0.5 hover:bg-orange-700 disabled:cursor-wait disabled:opacity-60"
               >
-                Proceed to Checkout
+                {checkoutLoading ? "Preparing secure checkout..." : "Proceed to Checkout"}
               </button>
 
               <button
                 type="button"
-                onClick={() => navigate("/search-product")}
+                onClick={() => navigate("/fetch-products")}
                 className="mt-3 w-full rounded-2xl border border-orange-200 bg-orange-50 px-6 py-4 text-xs font-black text-orange-700 transition hover:bg-orange-100"
               >
                 Continue Shopping

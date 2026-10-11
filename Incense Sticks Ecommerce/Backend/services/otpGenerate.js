@@ -1,9 +1,6 @@
 const OTPModel = require("../models/OTP");
 const transporter=require("../services/nodemailer")
 async function generateRandomSixDigit(email) {
-
-  try {
- 
     const otp= Math.floor(100000 + Math.random() * 900000);
 
     const newOTPEntry=await OTPModel.create({
@@ -162,14 +159,7 @@ const info = await transporter.sendMail({
   });
 
 
- return otp
-  
-
-   
-  } catch (error) {
-    console.log(error);
-    
-  }
+ return true;
 }
 
 
