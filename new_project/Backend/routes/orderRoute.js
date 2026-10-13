@@ -6,6 +6,7 @@ const { body, validationResult } = require("express-validator");
 const UnusedCodeModel = require("../models/UnusedCode");
 const UsedCodeModel = require("../models/UsedCode");
 const verifyToken = require("../middleware/verifyToken");
+const verifyAdminToken = require("../middleware/verifyAdminToken");
 const UserModel = require("../models/User");
 const CartModel = require("../models/Cart");
 const OrderModel=require("../models/Order");
@@ -21,13 +22,21 @@ const instance = new Razorpay({
 router.get("/fetch-my-orders", verifyToken, async (req, res) => {
     try {
         const orders = await OrderModel.find({ user_id: req.token._id })
-            .select("_id order_details total_amount createdAt")
+            .select("_id name email mobile_no address city state pincode razorpay_payment_id order_details total_amount createdAt")
             .sort({ createdAt: -1 })
             .limit(5)
             .lean()
 
         const data = orders.map((order) => ({
             _id: String(order._id),
+            name: order.name,
+            email: order.email,
+            mobile_no: order.mobile_no,
+            address: order.address,
+            city: order.city,
+            state: order.state,
+            pincode: order.pincode,
+            razorpay_payment_id: order.razorpay_payment_id,
             total_amount: order.total_amount,
             createdAt: order.createdAt,
             order_details: (order.order_details || []).map((item) => ({
@@ -65,7 +74,6 @@ router.post("/create-user-order",verifyToken,[
         }
 
         let total_amount=0
-        let items=[]
 
 
         const cart_data=await CartModel.find({user_id:exist_user._id})
@@ -73,28 +81,38 @@ router.post("/create-user-order",verifyToken,[
             return res.status(400).json({message:"Cart is Empty",success:false})
         }
 
+        const currentProducts=await ProductModel.find({
+            _id:{$in:cart_data.map((item)=>item.product_id)},
+        }).select("_id title stock")
+        const productById=new Map(currentProducts.map((product)=>[String(product._id),product]))
+        for(const item of cart_data){
+            const product=productById.get(String(item.product_id))
+            if(!product){
+                return res.status(409).json({message:`${item.product_title} is no longer available`,success:false})
+            }
+            if(product.stock<item.quantity){
+                return res.status(409).json({message:`Only ${product.stock} unit(s) of ${product.title} are currently in stock`,success:false})
+            }
+        }
+
         cart_data.forEach((ele)=>{
             total_amount+=ele.product_price * ele.quantity
-            items.push(`${ele.product_title} x ${ele.quantity}`)
         })
 
         const mynotes={ user_id: String(exist_user._id) }
-
-        items.forEach((ele,index)=>{
-            mynotes[`key${index+1}`]=ele
-        })
 
 
         let final_discount=0
 
         if(coupon_code){
 
-            const exist_coupon=await UnusedCodeModel.findOne({code:coupon_code})
+            const normalizedCoupon=String(coupon_code).trim()
+            const exist_coupon=await UnusedCodeModel.findOne({name:normalizedCoupon})
             if(!exist_coupon){
                 return res.status(400).json({message:"Invalid Coupon Code",success:false})
             }
 
-            const exist_used_coupon=await UsedCodeModel.findOne({code:coupon_code})
+            const exist_used_coupon=await UsedCodeModel.findOne({name:normalizedCoupon,user_id:exist_user._id})
             if(exist_used_coupon){
                 return res.status(400).json({message:"Coupon Code Already Used",success:false})
             }
@@ -102,6 +120,9 @@ router.post("/create-user-order",verifyToken,[
             
             const discount_price=(total_amount*exist_coupon.discount)/100
             final_discount=Math.min(discount_price,exist_coupon.maxDiscount,total_amount)
+            mynotes.coupon_name=normalizedCoupon
+            mynotes.coupon_discount=String(exist_coupon.discount)
+            mynotes.coupon_max_discount=String(exist_coupon.maxDiscount)
 
         }
 
@@ -185,6 +206,13 @@ body("pincode").isNumeric().withMessage("Invalid Pincode"),
         return res.status(400).json({message:"Payment details do not match this order",success:false})
      }
 
+     const priorOrder=await OrderModel.findOne({
+        razorpay_order_id,
+        user_id:exist_user._id,
+     }).select("_id name email mobile_no address city state pincode total_amount razorpay_payment_id createdAt").lean()
+     if(priorOrder){
+        return res.status(200).json({message:"Payment already verified",success:true,order:priorOrder})
+     }
 
      const cart_data=await CartModel.find({user_id:exist_user._id})
      if(cart_data.length===0){
@@ -226,12 +254,40 @@ body("pincode").isNumeric().withMessage("Invalid Pincode"),
    await Promise.all(cart_data.map((ele)=>
     ProductModel.findOneAndUpdate({_id:ele.product_id},{$inc:{stock:-ele.quantity}})
    ))
+   if(razorpayOrder.notes?.coupon_name){
+    await UsedCodeModel.updateOne(
+        {user_id:exist_user._id,name:razorpayOrder.notes.coupon_name},
+        {$setOnInsert:{
+            user_id:exist_user._id,
+            name:razorpayOrder.notes.coupon_name,
+            discount:Number(razorpayOrder.notes.coupon_discount),
+            maxDiscount:Number(razorpayOrder.notes.coupon_max_discount),
+        }},
+        {upsert:true}
+    )
+   }
    await CartModel.deleteMany({user_id:exist_user._id})
     
 
 
 
-      return res.status(200).json({message:"Payment Successfull",success:true})
+      return res.status(200).json({
+        message:"Payment Successful",
+        success:true,
+        order:{
+            _id:String(newOrder._id),
+            name:newOrder.name,
+            email:newOrder.email,
+            mobile_no:newOrder.mobile_no,
+            address:newOrder.address,
+            city:newOrder.city,
+            state:newOrder.state,
+            pincode:newOrder.pincode,
+            total_amount:newOrder.total_amount,
+            razorpay_payment_id:newOrder.razorpay_payment_id,
+            createdAt:newOrder.createdAt,
+        },
+      })
     } catch (error) {
         console.error("Payment verification failed:",error?.error?.description || error?.message)
      return res.status(500).json({message:"Internal Server Error",success:false})
@@ -239,9 +295,9 @@ body("pincode").isNumeric().withMessage("Invalid Pincode"),
 })
 
 
-router.post("/fetch-all-orders",verifyToken,[
+router.post("/fetch-all-orders",verifyAdminToken,[
      body("search").isString().withMessage("Invalid Search").isLength({max:50}).withMessage("Search Value is not longer than 50 Characters").optional(),
-        body("skip").isInt().withMessage("Invalid Skip Value"),
+        body("skip").isInt({min:0}).withMessage("Invalid Skip Value"),
 ],async(req,res)=>{
     try {
         
@@ -252,14 +308,17 @@ router.post("/fetch-all-orders",verifyToken,[
 
         const {search,skip}=req.body
       
-        const TotalDocuments=await OrderModel.countDocuments()
-        
         if(!search || search===""){
+            const TotalDocuments=await OrderModel.countDocuments()
             const data=await OrderModel.find({}).sort({_id:-1}).skip(skip).limit(100)
             return res.status(200).json({message:"Orders Fetched Successfully",success:true,data:data,count:TotalDocuments})
         }
 
-        const data=await OrderModel.find({"$text":{"$search":`"${search}"`}}).sort({_id:-1}).skip(skip).limit(100)
+        const query={"$text":{"$search":`"${search}"`}}
+        const [data,TotalDocuments]=await Promise.all([
+            OrderModel.find(query).sort({_id:-1}).skip(skip).limit(100),
+            OrderModel.countDocuments(query),
+        ])
         return res.status(200).json({message:"Orders Fetched Successfully",success:true,data:data,count:TotalDocuments})
     } catch (error) {
         console.log(error);

@@ -24,6 +24,8 @@ const unusedCodeSchema=new mongoose.Schema({
 })
 
 
+unusedCodeSchema.index({user_id:1,name:1},{unique:true})
+
 const UsedCodeModel=mongoose.model("rr_is_used_code_collection",unusedCodeSchema)
 
 

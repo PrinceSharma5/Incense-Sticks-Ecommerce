@@ -1,9 +1,15 @@
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 
 const PaymentSuccessPage = () => {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const order = state?.order;
+  const isVerifiedOrder = Boolean(order?._id && order?.razorpay_payment_id);
+  const address = order
+    ? [order.address, order.city, order.state, order.pincode].filter(Boolean).join(", ")
+    : "Open My Orders to view your delivery details.";
 
   return (
     <>
@@ -35,21 +41,22 @@ const PaymentSuccessPage = () => {
                 </div>
 
                 <p className="mt-8 text-xs font-black uppercase tracking-[0.25em] text-rose-100">
-                  Payment Successful
+                  {isVerifiedOrder ? "Payment Successful" : "Order Details"}
                 </p>
 
                 <h1 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">
-                  Thank you for your order!
+                  {isVerifiedOrder ? "Thank you for your order!" : "Check your order history"}
                 </h1>
 
                 <p className="mt-4 max-w-lg text-sm leading-7 text-rose-50 sm:text-base">
-                  Your payment has been received successfully. Your order is now
-                  confirmed and will be processed soon.
+                  {isVerifiedOrder
+                    ? "Your payment has been verified and your order is confirmed."
+                    : "Order details are available in My Orders after you sign in."}
                 </p>
 
                 <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <TrustCard title="Secure" text="Payment received" />
-                  <TrustCard title="Confirmed" text="Order placed" />
+                  <TrustCard title="Secure" text={isVerifiedOrder ? "Payment received" : "Account orders"} />
+                  <TrustCard title="Confirmed" text={isVerifiedOrder ? "Order placed" : "Order history"} />
                   <TrustCard title="Fast" text="Quick updates" />
                 </div>
               </div>
@@ -62,20 +69,19 @@ const PaymentSuccessPage = () => {
                 </h2>
 
                 <div className="mt-5 space-y-4">
-                  <SummaryRow label="Order ID" value="ORD-20260607-001" />
-                  <SummaryRow label="Payment ID" value="PAY-4F8K9L2M" />
-                  <SummaryRow label="Customer Name" value="Lokesh Kumar" />
-                  <SummaryRow label="Email" value="lokesh@example.com" />
-                  <SummaryRow label="Mobile" value="9876543210" />
-                  <SummaryRow
-                    label="Address"
-                    value="F-113, Palm Green, Ahmedabad, Gujarat - 380051"
-                  />
+                  <SummaryRow label="Order ID" value={order?._id || "View My Orders"} />
+                  <SummaryRow label="Payment ID" value={order?.razorpay_payment_id || "Available in My Orders"} />
+                  <SummaryRow label="Customer Name" value={order?.name || "Your account"} />
+                  <SummaryRow label="Email" value={order?.email || "Available in My Orders"} />
+                  <SummaryRow label="Mobile" value={order?.mobile_no || "Available in My Orders"} />
+                  <SummaryRow label="Address" value={address} />
 
                   <div className="border-t border-rose-200 dark:border-rose-900 pt-4">
                     <SummaryRow
                       label="Total Amount"
-                      value="₹1,499"
+                      value={order
+                        ? `₹${Number(order.total_amount || 0).toLocaleString("en-IN")}`
+                        : "Available in My Orders"}
                       highlight
                     />
                   </div>

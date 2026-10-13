@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DashboardNavbar from "../../components/dashboard/Header";
 import { useNavigate } from "react-router";
-import InfiniteScroll from "react-infinite-scroller";
+import InfiniteScroll from "../../components/InfiniteScroll";
 import ProductCard from "../../components/dashboard/Product_card";
 import toast, { Toaster } from "react-hot-toast";
-
-const LIMIT = 100;
 
 const FetchProduct = () => {
   const navigate = useNavigate();
@@ -19,6 +17,12 @@ const FetchProduct = () => {
   const [value, setValue] = useState("");
 
   const searchTimer = useRef(null);
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const skipRef = useRef(0);
+  const valueRef = useRef("");
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   const [selectdProduct, setselectdProduct] = useState({
     _id: "",
@@ -64,19 +68,32 @@ const FetchProduct = () => {
   };
 
   const resetAndFetch = (searchText = "") => {
+    valueRef.current = searchText;
+    skipRef.current = 0;
+    hasMoreRef.current = true;
     setSkip(0);
     setData([]);
     setHasMore(true);
-    fetchData(searchText, 0, true);
+    return fetchData(searchText, 0, true);
   };
 
-  const fetchData = async (
-    searchValue = value,
-    skipValue = skip,
+  const fetchData = useCallback(async (
+    searchValue = valueRef.current,
+    skipValue = skipRef.current,
     isReset = false
   ) => {
-    if (loading) return;
-    if (!hasMore && !isReset) return;
+    if (isReset) {
+      abortControllerRef.current?.abort();
+      requestIdRef.current += 1;
+      hasMoreRef.current = true;
+    } else if (loadingRef.current || !hasMoreRef.current) {
+      return;
+    }
+
+    const requestId = requestIdRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    loadingRef.current = true;
 
     try {
       setLoading(true);
@@ -88,6 +105,7 @@ const FetchProduct = () => {
           headers: {
             "Content-Type": "application/json",
           },
+          signal: controller.signal,
           body: JSON.stringify({
             search: searchValue,
             skip: skipValue,
@@ -96,36 +114,50 @@ const FetchProduct = () => {
       );
 
       const json = await response.json();
+      if (requestId !== requestIdRef.current) return;
 
-      if (json.success) {
+      if (response.ok && json.success && Array.isArray(json.data)) {
         if (skipValue === 0) {
           setData(json.data);
         } else {
           setData((prev) => [...prev, ...json.data]);
         }
 
-        const newSkip = skipValue + LIMIT;
+        const newSkip = skipValue + json.data.length;
+        skipRef.current = newSkip;
         setSkip(newSkip);
 
-        if (newSkip >= json.total || json.data.length === 0) {
+        const hasNextPage = json.data.length > 0 && newSkip < Number(json.count || 0);
+        hasMoreRef.current = hasNextPage;
+        if (!hasNextPage) {
           setHasMore(false);
         } else {
           setHasMore(true);
         }
       } else {
+        hasMoreRef.current = false;
         setHasMore(false);
       }
     } catch (error) {
+      if (error.name === "AbortError" || requestId !== requestIdRef.current) return;
       console.log(error);
+      hasMoreRef.current = false;
       setHasMore(false);
       toast.error("Something went wrong");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        loadingRef.current = false;
+        abortControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   const handleSearch = (e) => {
     const searchValue = e.target.value;
+    valueRef.current = searchValue;
+    hasMoreRef.current = false;
+    setHasMore(false);
     setValue(searchValue);
 
     if (searchTimer.current) {
@@ -138,6 +170,7 @@ const FetchProduct = () => {
   };
 
   const clearSearch = () => {
+    valueRef.current = "";
     setValue("");
 
     if (searchTimer.current) {
@@ -235,8 +268,15 @@ const FetchProduct = () => {
       return;
     }
 
-    fetchData("", 0, true);
-  }, [navigate]);
+    const initialFetch = window.setTimeout(() => fetchData("", 0, true), 0);
+    return () => window.clearTimeout(initialFetch);
+  }, [fetchData, navigate]);
+
+  useEffect(() => () => {
+    requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
 
   return (
     <>
@@ -649,8 +689,8 @@ const FetchProduct = () => {
 
           {/* Product Grid */}
           <InfiniteScroll
-            pageStart={0}
             hasMore={hasMore}
+            loading={loading}
             loadMore={() => fetchData(value, skip)}
             loader={
               <div
@@ -676,10 +716,7 @@ const FetchProduct = () => {
                     <ProductCard
                       product={ele}
                       setselectdProduct={setselectdProduct}
-                      setData={setData}
-                      setSkip={setSkip}
-                      setHasMore={setHasMore}
-                      fetchData={fetchData}
+                      fetchData={() => resetAndFetch(value)}
                       setopenModal={setopenModal}
                     />
                   </div>

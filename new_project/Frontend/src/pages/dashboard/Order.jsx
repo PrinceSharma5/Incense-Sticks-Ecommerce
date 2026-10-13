@@ -1,9 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import OrderDetails from "../../components/dashboard/OrderDetails";
 import DashboardNavbar from "../../components/dashboard/Header";
-
-const LIMIT = 100;
 
 const Order = () => {
   const [data, setdata] = useState([]);
@@ -14,7 +12,12 @@ const Order = () => {
 
   const navigate = useNavigate();
   const searchTimer = useRef(null);
-  const firstLoad = useRef(false);
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const skipRef = useRef(0);
+  const searchRef = useRef("");
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     if (!sessionStorage.getItem("adminToken")) {
@@ -22,13 +25,23 @@ const Order = () => {
     }
   }, [navigate]);
 
-  const fetchData = async (
-    searchvalue = search,
-    skipvalue = skip,
+  const fetchData = useCallback(async (
+    searchvalue = searchRef.current,
+    skipvalue = skipRef.current,
     isReset = false
   ) => {
-    if (loading) return;
-    if (!hasMore && !isReset) return;
+    if (isReset) {
+      abortControllerRef.current?.abort();
+      requestIdRef.current += 1;
+      hasMoreRef.current = true;
+    } else if (loadingRef.current || !hasMoreRef.current) {
+      return;
+    }
+
+    const requestId = requestIdRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    loadingRef.current = true;
 
     try {
       setLoading(true);
@@ -41,6 +54,7 @@ const Order = () => {
             "Content-Type": "application/json",
             token: sessionStorage.getItem("adminToken"),
           },
+          signal: controller.signal,
           body: JSON.stringify({
             skip: skipvalue,
             search: searchvalue,
@@ -49,9 +63,16 @@ const Order = () => {
       );
 
       const json = await response.json();
+      if (requestId !== requestIdRef.current) return;
 
-      if (json.success) {
-        const orders = json.data || [];
+      if (response.status === 403) {
+        sessionStorage.removeItem("adminToken");
+        navigate("/dashboard/login");
+        return;
+      }
+
+      if (response.ok && json.success && Array.isArray(json.data)) {
+        const orders = json.data;
         const totalCount = json.count || 0;
 
         if (skipvalue === 0) {
@@ -68,27 +89,40 @@ const Order = () => {
           });
         }
 
-        const newSkip = skipvalue + LIMIT;
+        const newSkip = skipvalue + orders.length;
+        skipRef.current = newSkip;
         setskip(newSkip);
 
-        if (newSkip >= totalCount || orders.length === 0) {
+        const hasNextPage = orders.length > 0 && newSkip < totalCount;
+        hasMoreRef.current = hasNextPage;
+        if (!hasNextPage) {
           sethasMore(false);
         } else {
           sethasMore(true);
         }
       } else {
+        hasMoreRef.current = false;
         sethasMore(false);
       }
     } catch (error) {
+      if (error.name === "AbortError" || requestId !== requestIdRef.current) return;
       console.log(error);
+      hasMoreRef.current = false;
       sethasMore(false);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        loadingRef.current = false;
+        abortControllerRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, [navigate]);
 
   const handleSearch = (e) => {
     const searchValue = e.target.value;
+    searchRef.current = searchValue;
+    hasMoreRef.current = false;
+    sethasMore(false);
     setsearch(searchValue);
 
     if (searchTimer.current) {
@@ -96,6 +130,8 @@ const Order = () => {
     }
 
     searchTimer.current = setTimeout(() => {
+      skipRef.current = 0;
+      hasMoreRef.current = true;
       setskip(0);
       setdata([]);
       sethasMore(true);
@@ -104,10 +140,15 @@ const Order = () => {
   };
 
   useEffect(() => {
-    if (firstLoad.current) return;
+    if (!sessionStorage.getItem("adminToken")) return undefined;
+    const initialFetch = window.setTimeout(() => fetchData("", 0, true), 0);
+    return () => window.clearTimeout(initialFetch);
+  }, [fetchData]);
 
-    firstLoad.current = true;
-    fetchData("", 0, true);
+  useEffect(() => () => {
+    requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
   }, []);
 
   return (

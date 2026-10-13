@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Cart from "./pages/Cart";
 import Product_Page from "./pages/Product_Page";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
+import MyOrders from "./pages/MyOrders";
 import ChatAssistant from "./components/ChatAssistant";
 
 const StorefrontAssistant = () => {
@@ -39,6 +40,7 @@ const App = () => (
         <Route path="/cart" element={<Cart />} />
         <Route path="/product-page/:id" element={<Product_Page />} />
         <Route path="/payment-success" element={<PaymentSuccessPage />} />
+        <Route path="/my-orders" element={<MyOrders />} />
       </Routes>
       <StorefrontAssistant />
     </div>

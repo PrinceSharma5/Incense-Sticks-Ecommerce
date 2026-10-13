@@ -13,7 +13,8 @@ const add_to_cart=async(req,res)=>{
             return res.status(400).json({message:errors.array()[0].msg,success:false})
         }
 
-        const {product_id,quantity}=req.body
+        const {product_id}=req.body
+        const requestedQuantity=Number(req.body.quantity)
         const exist_user=await UserModel.findOne({_id:req.token._id})
         if(!exist_user){
             return res.status(400).json({message:"Invalid Authentication",success:false})
@@ -24,11 +25,26 @@ const add_to_cart=async(req,res)=>{
             return res.status(400).json({message:"Product not found",success:false})
         }
 
+        if(!Number.isInteger(requestedQuantity) || requestedQuantity<1){
+            return res.status(400).json({message:"Invalid Quantity",success:false})
+        }
+
+        if(exist_product.stock<requestedQuantity){
+            return res.status(400).json({message:"Out of Stock",success:false})
+        }
+
+        if(!exist_product.images?.[0]){
+            return res.status(400).json({message:"Product image is unavailable",success:false})
+        }
+
         const exist_cart=await CartModel.findOne({product_id:product_id,user_id:exist_user._id})
         if(exist_cart){
-            if(exist_product.stock>=exist_cart.quantity+quantity){
+            if(exist_product.stock>=exist_cart.quantity+requestedQuantity){
 
-                exist_cart.quantity=exist_cart.quantity+quantity
+                exist_cart.quantity=exist_cart.quantity+requestedQuantity
+                exist_cart.product_title=exist_product.title
+                exist_cart.product_price=exist_product.actual_price
+                exist_cart.product_image=exist_product.images[0]
                 await exist_cart.save()
                 return res.status(200).json({message:"Product added to cart successfully",success:true})
             }
@@ -41,7 +57,7 @@ const add_to_cart=async(req,res)=>{
         const newItem=new CartModel({
             user_id:exist_user._id,
             product_id:product_id,
-            quantity:quantity,
+            quantity:requestedQuantity,
             product_title:exist_product.title,
             product_price:exist_product.actual_price,
             product_image:exist_product.images[0]
@@ -71,11 +87,6 @@ const remove_from_cart=async(req,res)=>{
      const exist_user=await UserModel.findOne({_id:req.token._id})
         if(!exist_user){
             return res.status(400).json({message:"Invalid Authentication",success:false})
-        }
-
-        const exist_product=await ProductModel.findOne({_id:product_id})
-        if(!exist_product){
-            return res.status(400).json({message:"Product not found",success:false})
         }
 
         const exist_cart=await CartModel.findOne({product_id:product_id,user_id:exist_user._id})
@@ -128,28 +139,27 @@ const reduce_cart_quantity=async(req,res)=>{
             return res.status(400).json({message:errors.array()[0].msg,success:false})
         }
 
-        const {product_id,quantity}=req.body
+        const {product_id}=req.body
+        const requestedQuantity=Number(req.body.quantity)
         const exist_user=await UserModel.findOne({_id:req.token._id})
         if(!exist_user){
             return res.status(400).json({message:"Invalid Authentication",success:false})
         }
 
-        const exist_product=await ProductModel.findOne({_id:product_id})
-        if(!exist_product){
-            return res.status(400).json({message:"Product not found",success:false})
-        }
-
         const exist_cart=await CartModel.findOne({product_id:product_id,user_id:exist_user._id})
         if(exist_cart){
-            
-            if(exist_cart.quantity===1){
-                await CartModel.deleteOne({product_id:product_id,user_id:exist_user._id})
+            if(!Number.isInteger(requestedQuantity) || requestedQuantity<1){
+                return res.status(400).json({message:"Invalid Quantity",success:false})
+            }
+
+            if(requestedQuantity>=exist_cart.quantity){
+                await CartModel.deleteOne({_id:exist_cart._id,user_id:exist_user._id})
                 return res.status(200).json({message:"Product removed from cart successfully",success:true})
             }
 
             else{
 
-                exist_cart.quantity=exist_cart.quantity-quantity
+                exist_cart.quantity=exist_cart.quantity-requestedQuantity
                 await exist_cart.save()
                 return res.status(200).json({message:"Product Quantity is Updated",success:true})
             }

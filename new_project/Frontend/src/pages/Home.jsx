@@ -15,27 +15,19 @@ const Home = () => {
     const fetchProducts = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_BASE_URL}/api/product/fetch-all-products`,
+          `${import.meta.env.VITE_BASE_URL}/api/product/fetch-data-with-category`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ skip: 0 }),
           }
         );
         const result = await response.json();
 
-        if (!response.ok || !result.success || !Array.isArray(result.data)) {
+        if (!response.ok || !result.success || !result.data || typeof result.data !== "object") {
           throw new Error(result.message || "Could not load products.");
         }
 
-        const groupedProducts = result.data.reduce((groups, product) => {
-          const category = product.category?.trim() || "Incense";
-          groups[category] ??= [];
-          if (groups[category].length < 20) groups[category].push(product);
-          return groups;
-        }, {});
-
-        if (isCurrent) setProductsByCategory(groupedProducts);
+        if (isCurrent) setProductsByCategory(result.data);
       } catch (error) {
         console.error("Failed to load the admin product catalog:", error);
         if (isCurrent) setCatalogError(true);

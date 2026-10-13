@@ -436,7 +436,7 @@ const CartPage = () => {
               return;
             }
 
-            navigate("/payment-success");
+            navigate("/payment-success", { state: { order: verificationResult.order } });
           } catch (error) {
             console.error("Payment verification failed:", error);
             toast.error("Could not verify the payment. Please contact support before trying again.");

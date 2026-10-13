@@ -1,6 +1,5 @@
 const dbToConnect = require("./db/db");
 require("dotenv").config();
-dbToConnect();
 
 const adminRouter = require("./routes/adminRoute");
 const categoryRouter = require("./routes/categoryRoute");
@@ -27,6 +26,14 @@ app.use("/api/chat", chatRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/coupon-code", unusedCouponCodeRouter);
 
-app.listen(process.env.PORT, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
-});
+const port = Number(process.env.PORT) || 8502;
+
+dbToConnect()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
+  })
+  .catch(() => {
+    process.exitCode = 1;
+  });

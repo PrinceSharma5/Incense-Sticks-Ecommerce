@@ -1,5 +1,5 @@
 import { useState } from "react";
-import InfiniteScroll from "react-infinite-scroller";
+import InfiniteScroll from "../InfiniteScroll";
 
 export default function OrderDetails({
   data,
@@ -120,8 +120,8 @@ export default function OrderDetails({
 
         {/* Table */}
         <InfiniteScroll
-          pageStart={0}
-          hasMore={hasMore && !loading}
+          hasMore={hasMore}
+          loading={loading}
           loadMore={() => fetchData(search, skip)}
           loader={
             <div key="loader" className="flex justify-center py-10">

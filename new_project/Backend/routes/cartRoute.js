@@ -9,12 +9,12 @@ const router=express.Router()
 
 router.post("/add-to-cart",verifyToken,[
     body("product_id").isMongoId().withMessage("Invalid Product id"),
-    body("quantity").isInt().withMessage("Invalid Quantity"),
+    body("quantity").isInt({min:1}).withMessage("Invalid Quantity"),
 ],add_to_cart)
 
 router.post("/reduce-from-cart",verifyToken,[
     body("product_id").isMongoId().withMessage("Invalid Product id"),
-    body("quantity").isInt().withMessage("Invalid Quantity"),
+    body("quantity").isInt({min:1}).withMessage("Invalid Quantity"),
 ],reduce_cart_quantity)
 
 

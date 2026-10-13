@@ -8,18 +8,39 @@ const AdminModel = require("../models/Admin");
 const ProductModel = require("../models/Product");
 const path = require("path");
 const CategoryModel = require("../models/Category");
+const CartModel = require("../models/Cart");
 const router=express.Router()
 
-const deleteAllFiles=(files)=>{
-
-    files.map((ele)=>{
-
-    
-        
-        if(fs.existsSync(ele.path)){
-            fs.unlinkSync(ele.path)
-        }
+const deleteAllFiles=(files=[])=>{
+    files.forEach((file)=>{
+        if(file?.path && fs.existsSync(file.path)) fs.unlinkSync(file.path)
     })
+}
+
+const deleteProductImageFile=(imageUrl)=>{
+    try {
+        const pathname=new URL(imageUrl).pathname
+        const prefix="/assets/product_images/"
+        if(!pathname.startsWith(prefix)) return
+        const filename=path.basename(pathname)
+        const imagePath=path.join(process.cwd(),"statics","product_images",filename)
+        if(fs.existsSync(imagePath)) fs.unlinkSync(imagePath)
+    } catch {
+        // Ignore remote or malformed image URLs; only uploaded local files are removed.
+    }
+}
+
+const validProductPricing=(mrp,discount,actual_price,stock)=>{
+    const values=[mrp,discount,actual_price,stock].map(Number)
+    const [normalizedMrp,normalizedDiscount,normalizedPrice,normalizedStock]=values
+    return values.every(Number.isFinite)
+        && normalizedMrp>0
+        && normalizedDiscount>=0
+        && normalizedDiscount<=100
+        && normalizedPrice>0
+        && normalizedPrice<=normalizedMrp
+        && Number.isInteger(normalizedStock)
+        && normalizedStock>=0
 }
 
 
@@ -49,6 +70,15 @@ const add_new_product=async(req,res)=>{
         }
 
         const {title,brand_name,category,fragnance_type,mrp,discount,actual_price,stock,description,burning_time,weight,material}=req.body
+
+        if(!validProductPricing(mrp,discount,actual_price,stock)){
+            deleteAllFiles(req.files)
+            return res.status(400).json({message:"Prices, discount, and stock must be valid",success:false})
+        }
+
+        if(!Array.isArray(req.files) || req.files.length===0){
+            return res.status(400).json({message:"At least one product image is required",success:false})
+        }
 
         const exist_admin=await AdminModel.findOne({_id:req.token._id})
         if(!exist_admin){
@@ -119,10 +149,10 @@ const fetch_all_products=async(req,res)=>{
         }
        
 
-        const TotalDocuments=await ProductModel.countDocuments()
+        const TotalDocuments=await ProductModel.countDocuments(query)
 
 const data=await ProductModel.find(query).sort({_id:-1}).skip(skip).limit(100)
-            return res.status(200).json({message:"Products fetched successfully",success:true,data:data})
+            return res.status(200).json({message:"Products fetched successfully",success:true,data:data,count:TotalDocuments})
         
     } catch (error) {
 
@@ -155,19 +185,9 @@ const delete_specific_product=async(req,res)=>{
 
         
 
-        exist_product.images.map((ele)=>{
+        exist_product.images.forEach(deleteProductImageFile)
 
-            const jonPath=path.join(process.cwd(),"statics","product_images","/")
-            let newUrl=path.basename(new URL(ele).pathname)
-         
-
-           if(fs.existsSync(jonPath+newUrl)){
-
-               fs.unlinkSync(jonPath+newUrl)
-           }
-        
-        })
-
+        await CartModel.deleteMany({product_id:exist_product._id})
         await ProductModel.deleteOne({_id:req.body._id})
         
         return res.status(200).json({message:"Product deleted successfully",success:true})
@@ -191,6 +211,10 @@ const update_product_details=async(req,res)=>{
         }
 
         const {title,brand_name,category,fragnance_type,mrp,discount,actual_price,stock,description,burning_time,weight,material}=req.body
+
+        if(!validProductPricing(mrp,discount,actual_price,stock)){
+            return res.status(400).json({message:"Prices, discount, and stock must be valid",success:false})
+        }
 
 
         const exist_admin=await AdminModel.findOne({_id:req.token._id})
@@ -234,53 +258,45 @@ const update_product_details=async(req,res)=>{
 
 const update_my_product_images=async(req,res)=>{
     try {
+        if(!req.file){
+            return res.status(400).json({message:"Please select an image",success:false})
+        }
+
         const errors=validationResult(req)
         if(!errors.isEmpty()){
-           
-  if(fs.existsSync(req.file.path)){
-            fs.unlinkSync(req.file.path)
-        }
+            deleteAllFiles([req.file])
             return res.status(400).json({message:errors.array()[0].msg,success:false})
         }
 
         const {index,_id}=req.body
         const exist_admin=await AdminModel.findOne({_id:req.token._id})
         if(!exist_admin){
-              if(fs.existsSync(req.file.path)){
-            fs.unlinkSync(req.file.path)
-        }
+            deleteAllFiles([req.file])
             return res.status(400).json({message:"Invalid Authentication",success:false})
         }
 
         const exist_product=await ProductModel.findOne({_id:req.body._id})
         if(!exist_product){
-              if(fs.existsSync(req.file.path)){
-            fs.unlinkSync(req.file.path)
-        }
+            deleteAllFiles([req.file])
             return res.status(400).json({message:"Product not found",success:false})
         }
 
-        if(exist_product.images.length<=index){
+        if(index<0 || index>=exist_product.images.length){
+            deleteAllFiles([req.file])
             return res.status(400).json({message:"Invalid Index",success:false})
         }
 
             let url=`${process.env.BASE_URL}/assets/product_images/${req.file.filename}`
+            const previousImage=exist_product.images[index]
             exist_product.images[index]=url
             await exist_product.save()
-
-      
-
-          const jonPath=path.join(process.cwd(),"statics","product_images","/")
-            let newUrl=path.basename(new URL(exist_product.images[index]).pathname)
-         
+            deleteProductImageFile(previousImage)
 
         return res.status(200).json({message:"Image Updated Successfully",success:true})
         
 
     } catch (error) {
-          if(fs.existsSync(req.file.path)){
-            fs.unlinkSync(req.file.path)
-        }
+        deleteAllFiles(req.file ? [req.file] : [])
         return res.status(500).json({message:"Internal Server Error",success:false})
     }
 }

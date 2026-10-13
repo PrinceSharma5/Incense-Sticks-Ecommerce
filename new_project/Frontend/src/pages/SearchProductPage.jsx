@@ -1,24 +1,77 @@
-import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
-import InfiniteScroll from "react-infinite-scroller";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import InfiniteScroll from "../components/InfiniteScroll";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import toast, { Toaster } from "react-hot-toast";
 
 const LIMIT = 100;
 
 const SearchProductPage = () => {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [data, setData] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [skip, setSkip] = useState(0);
   const [isFirstLoading, setIsFirstLoading] = useState(true);
   const [isMoreLoading, setIsMoreLoading] = useState(false);
+  const [addingProductId, setAddingProductId] = useState("");
+  const loadingRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   const category = params.get("category") || "";
   const search = params.get("search") || "";
 
+  const addProductToCart = async (product) => {
+    const token = sessionStorage.getItem("userToken");
+    if (!token) {
+      navigate("/login", { state: { message: "Please log in to add products to your cart." } });
+      return;
+    }
+    if (addingProductId) return;
+    setAddingProductId(product._id);
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/cart/add-to-cart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token },
+        body: JSON.stringify({ product_id: product._id, quantity: 1 }),
+      });
+      const json = await response.json();
+
+      if (response.status === 401) {
+        sessionStorage.removeItem("userToken");
+        navigate("/login", { state: { message: json.message } });
+        return;
+      }
+      if (!response.ok || !json.success) {
+        toast.error(json.message || "Could not add this product to your cart.");
+        return;
+      }
+      toast.success(json.message || "Product added to your cart.");
+    } catch (error) {
+      console.error("Failed to add product to cart:", error);
+      toast.error("Could not connect to the cart. Please try again.");
+    } finally {
+      setAddingProductId("");
+    }
+  };
+
   const fetchData = useCallback(async ({ searchValue, skipValue, reset = false }) => {
+    if (reset) {
+      abortControllerRef.current?.abort();
+      requestIdRef.current += 1;
+    } else if (loadingRef.current) {
+      return;
+    }
+
+    const requestId = requestIdRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    loadingRef.current = true;
+
     try {
       if (reset) {
         setIsFirstLoading(true);
@@ -45,13 +98,15 @@ const SearchProductPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
+          signal: controller.signal,
           body: JSON.stringify(query),
         }
       );
 
       const json = await response.json();
+      if (requestId !== requestIdRef.current) return;
 
-      if (!json.success) {
+      if (!response.ok || !json.success || !Array.isArray(json.data)) {
         console.log(json.message);
         setHasMore(false);
         return;
@@ -74,11 +129,16 @@ const SearchProductPage = () => {
         setHasMore(true);
       }
     } catch (error) {
+      if (error.name === "AbortError" || requestId !== requestIdRef.current) return;
       console.log(error);
       setHasMore(false);
     } finally {
-      setIsFirstLoading(false);
-      setIsMoreLoading(false);
+      if (requestId === requestIdRef.current) {
+        loadingRef.current = false;
+        abortControllerRef.current = null;
+        setIsFirstLoading(false);
+        setIsMoreLoading(false);
+      }
     }
   }, [category]);
 
@@ -118,9 +178,15 @@ const SearchProductPage = () => {
     void Promise.resolve().then(() => resetAndFetch(search));
   }, [resetAndFetch, search]);
 
+  useEffect(() => () => {
+    requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+  }, []);
+
   return (
     <>
     <Navbar/>
+    <Toaster position="top-right" />
     <main className="min-h-screen bg-stone-50 px-4 py-10 text-slate-900 sm:px-6 lg:px-8 dark:bg-slate-950 dark:text-slate-100">
       <section className="mx-auto max-w-7xl" data-voice-section="product results">
         {/* Header */}
@@ -219,7 +285,6 @@ const SearchProductPage = () => {
           <>
             {data.length > 0 ? (
               <InfiniteScroll
-                pageStart={0}
                 loadMore={() => {
                   if (!isMoreLoading && hasMore) {
                     fetchData({
@@ -229,7 +294,8 @@ const SearchProductPage = () => {
                     });
                   }
                 }}
-                hasMore={hasMore && !isMoreLoading}
+                hasMore={hasMore}
+                loading={isMoreLoading}
                 loader={
                   <div key="loader" className="py-8 text-center">
                     <p className="text-sm font-bold text-rose-600 dark:text-rose-300">
@@ -326,15 +392,17 @@ const SearchProductPage = () => {
                           </div>
 
                           <div className="mt-5 grid grid-cols-2 gap-2">
-                            <button className="rounded-xl border border-rose-200 dark:border-slate-700 px-3 py-2.5 text-xs font-bold text-rose-700 dark:text-rose-300 transition hover:bg-rose-50 dark:hover:bg-slate-900">
+                            <Link to={`/product-page/${product._id}`} className="rounded-xl border border-rose-200 dark:border-slate-700 px-3 py-2.5 text-center text-xs font-bold text-rose-700 dark:text-rose-300 transition hover:bg-rose-50 dark:hover:bg-slate-900">
                               View Details
-                            </button>
+                            </Link>
 
                             <button
-                              disabled={product.stock <= 0}
+                              type="button"
+                              disabled={product.stock <= 0 || addingProductId === product._id}
+                              onClick={() => addProductToCart(product)}
                               className="rounded-xl bg-rose-600 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-900/20 transition hover:-translate-y-0.5 hover:bg-rose-700 disabled:bg-slate-400 disabled:shadow-none"
                             >
-                              Add Cart
+                              {addingProductId === product._id ? "Adding..." : "Add to Cart"}
                             </button>
                           </div>
                         </div>

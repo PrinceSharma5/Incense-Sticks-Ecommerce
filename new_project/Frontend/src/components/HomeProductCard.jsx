@@ -74,6 +74,7 @@ export default function HomeProductCard({ data = {}, isLoading = false, hasError
     <div className="bg-stone-50 dark:bg-slate-950">
       {categories.map((categoryName) => {
         const products = data[categoryName] || [];
+        const categorySearch = new URLSearchParams({ category: categoryName }).toString();
 
         if (products.length === 0) return null;
 
@@ -102,7 +103,7 @@ export default function HomeProductCard({ data = {}, isLoading = false, hasError
                   </p>
                 </div>
 
-                <Link to={`/fetch-products?category=${categoryName}`} className="hidden shrink-0 rounded-full border border-rose-200 bg-white dark:bg-slate-900 px-5 py-2.5 text-sm font-bold text-rose-800 shadow-sm transition hover:border-rose-700 hover:bg-rose-700 hover:text-white sm:block dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-800">
+                <Link to={`/fetch-products?${categorySearch}`} className="hidden shrink-0 rounded-full border border-rose-200 bg-white dark:bg-slate-900 px-5 py-2.5 text-sm font-bold text-rose-800 shadow-sm transition hover:border-rose-700 hover:bg-rose-700 hover:text-white sm:block dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-800">
                   View All
                 </Link>
               </div>
@@ -268,9 +269,9 @@ export default function HomeProductCard({ data = {}, isLoading = false, hasError
                 })}
               </Swiper>
 
-              <button className="mt-4 w-full rounded-full bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-900/20 transition hover:-translate-y-0.5 hover:bg-rose-700 sm:hidden">
+              <Link to={`/fetch-products?${categorySearch}`} className="mt-4 block w-full rounded-full bg-rose-600 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-rose-900/20 transition hover:-translate-y-0.5 hover:bg-rose-700 sm:hidden">
                 View All {categoryName}
-              </button>
+              </Link>
             </div>
           </section>
         );

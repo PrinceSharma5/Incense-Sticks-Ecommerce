@@ -1,6 +1,6 @@
 import toast from "react-hot-toast";
 
-const ProductCard = ({ product,setData, setSkip, setHasMore, fetchData,setopenModal,setselectdProduct }) => {
+const ProductCard = ({ product, fetchData, setopenModal, setselectdProduct }) => {
   const {
     _id,
     title,
@@ -44,35 +44,27 @@ const ProductCard = ({ product,setData, setSkip, setHasMore, fetchData,setopenMo
   };
 
   const handleDelete = async() => {
-
-
-    const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/product/delete-specific-product`,{
-      method:"DELETE",
-      headers:{
-        "Content-Type":"application/json",
-        token:sessionStorage.getItem("adminToken")
-      },body:JSON.stringify({
-        _id:_id
+    try {
+      const response=await fetch(`${import.meta.env.VITE_BASE_URL}/api/product/delete-specific-product`,{
+        method:"DELETE",
+        headers:{
+          "Content-Type":"application/json",
+          token:sessionStorage.getItem("adminToken")
+        },body:JSON.stringify({ _id })
       })
-    })
 
-    const json = await response.json()
+      const json = await response.json()
+      if(!response.ok || !json.success){
+        toast.error(json.message || "Could not delete this product.")
+        return
+      }
 
-    if(json.success){
       toast.success(json.message)
-
-      setSkip(0)
-      setData([])
-      setHasMore(true)
-      setTimeout(()=>{
-
-        fetchData()
-      },200)
+      await fetchData()
+    } catch (error) {
+      console.error("Failed to delete product:",error)
+      toast.error("Could not connect to the server. Please try again.")
     }
-    else{
-      toast.error(json.message)
-    }
-    // call delete api here
   };
 
   return (
