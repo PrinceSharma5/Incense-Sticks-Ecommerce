@@ -7,7 +7,8 @@ async function generateRandomSixDigit(email) {
         email:email,
         otp:otp
     })
-const info = await transporter.sendMail({
+try {
+  await transporter.sendMail({
     from: `"Raghu Rash" <${process.env.SMTP_USER}>`, // sender address
     to: email, // list of recipients
     subject: "OTP Generation", // subject line
@@ -157,6 +158,10 @@ const info = await transporter.sendMail({
 </html>
     `, // HTML body
   });
+} catch (error) {
+  await OTPModel.deleteOne({ _id: newOTPEntry._id }).catch(() => {});
+  throw error;
+}
 
 
  return true;
