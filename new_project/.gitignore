@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production
 
 # Dependencies and generated builds
 **/node_modules/

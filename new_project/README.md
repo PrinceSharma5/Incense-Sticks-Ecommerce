@@ -18,3 +18,5 @@ Run npm commands inside the matching Backend or Frontend directory. The director
 4. In `Frontend`, run `npm ci` and `npm run dev`.
 
 The backend defaults to port `8502`; the frontend API URL should match it. Keep real credentials in local `.env` files and out of Git.
+
+Production frontend builds use `https://www.api.princesharma.online` from `Frontend/.env.production`. If the hosting provider defines `VITE_BASE_URL`, set it to the same URL and redeploy the frontend.
